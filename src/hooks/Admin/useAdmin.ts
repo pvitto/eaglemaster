@@ -23,7 +23,7 @@ export function useAdminLogic(user: user) {
     setServicios,
     setCheckin,
   } = useFetchData(user.email);
-
+//
   // Estados para las opciones del menú
   const initialEstados = Object.fromEntries(
     opcionesAdmin.map((opcion) => [opcion.estadoKey, false])
