@@ -17,7 +17,7 @@ export const useCheckinForm = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
   ) => {
     const { name, value } = e.target;
-
+// espero
     const parsedValue = [
       "planilla",
       "sello",
