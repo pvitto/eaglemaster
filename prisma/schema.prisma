@@ -162,3 +162,39 @@ model Fondo {
 
   @@index([tipo])
 }
+
+enum AlertSeverity {
+  INFO
+  WARN
+  CRITICAL
+}
+
+enum AlertStatus {
+  OPEN
+  ACK
+  RESOLVED
+  SILENCED
+}
+
+model Alert {
+  id         Int           @id @default(autoincrement())
+  kind       String        // código de la regla, ej: "FECHA_CIERRE_PROX"
+  title      String
+  message    String
+  severity   AlertSeverity @default(WARN)
+  status     AlertStatus   @default(OPEN)
+
+  // Referencia opcional a alguna entidad (para saber de qué "cosa" trata la alerta)
+  entityType String?       // ej: "FechaCierre" | "Checkin" | "Cliente"
+  entityId   Int?
+
+  // Destino opcional (si quieres dirigir a un rol o usuario)
+  role       Role?         // usa tu enum Role ya existente
+  userId     Int?
+
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+
+  @@index([kind, status])
+  @@index([entityType, entityId])
+}
