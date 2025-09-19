@@ -3,17 +3,29 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { runAlertChecks } from "@/server/alerts";
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
-    await runAlertChecks(); // si aquí explota, lo capturamos
+    // Ejecuta reglas al consultar (en prod conviene moverlo a un cron)
+    await runAlertChecks();
+
+    // Filtros por rol / userId (opcionales)
+    const { searchParams } = new URL(req.url);
+    const role = searchParams.get("role");
+    const userId = searchParams.get("userId");
+
+    const where: any = {};
+    if (role) where.role = role;
+    if (userId) where.userId = Number(userId);
+
     const alerts = await prisma.alert.findMany({
+      where,
       orderBy: { createdAt: "desc" },
       take: 100,
     });
+
     return NextResponse.json(alerts, { status: 200 });
   } catch (err) {
     console.error("[/api/alerts] error:", err);
-    // devolvemos arreglo vacío para no romper el front
     return NextResponse.json([], { status: 200 });
   }
 }
