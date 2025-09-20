@@ -1,5 +1,6 @@
-// src/app/admin/page.client.tsx
 "use client";
+
+import { useCallback, type ChangeEvent } from "react";
 
 import { Card } from "@/components/ui/card";
 import { Informa } from "@/components/General/informa";
@@ -12,16 +13,18 @@ import { useAdminLogic } from "@/hooks/Admin/useAdmin";
 import { useCheckinForm } from "@/hooks/Checkin/useCheckinForm";
 import { initialFormData } from "@/components/General/utils";
 
+// Tablas
 import { DataTableUsuarios } from "@/components/Admin/dataTableUsuarios";
 import { DataTableFondos } from "@/components/Digitador/dataTableFondos";
 import { DataTableClientes } from "@/components/Admin/dataTableClientes";
 import { DataTableRutas } from "@/components/Admin/dataTableRutas";
-import { DataTableCheckin } from "@/components/Checkin/dataTableCheckin";
-import { ServiciosTable } from "@/components/Digitador/serviciosTable";
 import { DataTableFechasCierre } from "@/components/Admin/dataTableFechasCierre";
 import { DataTableSedes } from "@/components/Admin/dataTableSedes";
+import { DataTableCheckin } from "@/components/Checkin/dataTableCheckin";
+import { ServiciosTable } from "@/components/Digitador/serviciosTable";
 
-import { UsuarioForm } from "@/components/Admin/usuarioForm";
+// Formularios
+import UsuarioForm from "@/components/Admin/usuarioForm";
 import { FondoForm } from "@/components/Admin/fondoForm";
 import { ClienteForm } from "@/components/Admin/clienteForm";
 import { RutaForm } from "@/components/Admin/rutaForm";
@@ -29,137 +32,103 @@ import { ServicioForm } from "@/components/Admin/servicioForm";
 import { FechaCierreForm } from "@/components/Admin/fechaCierreForm";
 import { SedeForm } from "@/components/Admin/sedeForm";
 
-import type { user } from "@/types/interfaces";
+// Si tu proyecto define este tipo, úsalo; si no, puedes quitarlo
+import type { user as AppUser } from "@/types/interfaces";
 
-/** Props que recibe este componente (usuario logueado) */
-interface AdminProps {
-  user: user;
-}
+type AdminProps = {
+  user?: AppUser;
+};
 
 export const Admin: React.FC<AdminProps> = ({ user }) => {
-  // Hook principal de la página de administración
   const {
-    // catálogos / datasets
+    // datos
     usuarios,
     fondos,
     clientes,
     rutas,
     servicios,
     fechasCierre,
-    checkin,
     sedes,
+    checkin,
 
-    // estado de UI
-    loading,
-    error,
+    // estado UI
+    estados,
+    setEstados,
     selectedTable,
     setSelectedTable,
 
-    // CRUD genérico vía formularios
-    formData,
-    handleInputChange,
-    handleSubmit,
-    handleEdit,
+    // estado de red
+    loading,
+    error,
+
+    // CRUD helpers
     handleDelete,
+    handleEdit,
+    handleSubmit,
+    handleInputChange, // <- firma (campo, valor)
+    formData,
     resetForm,
     toast,
   } = useAdminLogic(user);
 
-  // Edits/Deletes específicos para Check-in (tu hook actual)
-  const {
-    handleEdit: handleEditCheckin,
-    handleDelete: handleDeleteCheckin,
-  } = useCheckinForm(initialFormData, clientes, checkin, () => {}, toast);
+  // Adaptador de evento -> (campo, valor) para reutilizar tu lógica actual
+  const handleFormEvent = useCallback(
+    (e: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+      const t = e.target as HTMLInputElement;
+      let value: any = t.type === "checkbox" ? t.checked : t.value;
 
-  // --------- Render de Tablas ----------
-  const renderTable = () => {
-    switch (selectedTable) {
-      case "usuarios":
-        return (
-          <DataTableUsuarios
-            data={usuarios}
-            onEdit={handleEdit}
-            onDelete={handleDelete}
-            user={user}
-          />
-        );
-      case "fondos":
-        return (
-          <DataTableFondos
-            data={fondos}
-            onEdit={handleEdit}
-            onDelete={handleDelete}
-            user={user}
-            mode="admin"
-          />
-        );
-      case "clientes":
-        return (
-          <DataTableClientes
-            data={clientes}
-            onEdit={handleEdit}
-            onDelete={handleDelete}
-            user={user}
-          />
-        );
-      case "rutas":
-        return (
-          <DataTableRutas
-            data={rutas}
-            onEdit={handleEdit}
-            onDelete={handleDelete}
-            user={user}
-          />
-        );
-      case "checkins":
-        return (
-          <DataTableCheckin
-            data={checkin}
-            onEdit={handleEditCheckin}
-            onDelete={handleDeleteCheckin}
-            user={user}
-          />
-        );
-      case "servicios":
-        return (
-          <ServiciosTable
-            data={servicios}
-            onEdit={handleEdit}
-            onDelete={handleDelete}
-            user={user}
-          />
-        );
-      case "fechasCierre":
-        return (
-          <DataTableFechasCierre
-            data={fechasCierre}
-            onEdit={handleEdit}
-            onDelete={handleDelete}
-            user={user}
-          />
-        );
-      case "sedes":
-        return (
-          <DataTableSedes
-            data={sedes}
-            onEdit={handleEdit}
-            onDelete={handleDelete}
-            user={user}
-          />
-        );
-      default:
-        return null;
-    }
-  };
+      // Mini normalizaciones útiles
+      if (t.type === "number") value = Number(t.value);
 
-  // --------- Formularios ----------
+      // Para ids que guardas como number | null
+      const mayBeId = [
+        "sedeId",
+        "idCliente",
+        "idRutaLlegada",
+        "idServicio",
+        "idFondo",
+        "idFechaCierre",
+        "idSede",
+      ];
+
+      if (mayBeId.includes(t.name)) {
+        value = t.value === "" ? null : Number(t.value);
+      }
+
+      handleInputChange(t.name as any, value);
+    },
+    [handleInputChange]
+  );
+
+  // Hooks específicos de checkin (edición desde tabla)
+  const { handleEdit: handleEditCheckin, handleDelete: handleDeleteCheckin } =
+    useCheckinForm(initialFormData, clientes, checkin, /* toast opcional */ toast);
+
+  // --------- Carga / errores ---------
+  if (loading) {
+    return <Informa text="Cargando..." btntxt="si" log={false} />;
+  }
+  if (error) {
+    return <Informa text={error} btntxt="Cerrar sesión" log={true} />;
+  }
+  if (!usuarios.length) {
+    return (
+      <Informa
+        text="No se encontraron datos"
+        btntxt="Volver para iniciar sesión"
+        log={true}
+      />
+    );
+  }
+
+  // --------- Formularios ---------
   const renderForm = () => {
     switch (selectedTable) {
       case "usuarios":
         return (
           <UsuarioForm
-            formData={formData}
-            onInputChange={handleInputChange}
+            formData={formData as any}
+            onInputChange={handleFormEvent}
             onSubmit={handleSubmit}
             isEditMode={!!(formData as any).idUsuario}
             sedes={sedes}
@@ -169,8 +138,8 @@ export const Admin: React.FC<AdminProps> = ({ user }) => {
       case "fondos":
         return (
           <FondoForm
-            formData={formData}
-            onInputChange={handleInputChange}
+            formData={formData as any}
+            onInputChange={handleFormEvent}
             onSubmit={handleSubmit}
             isEditMode={!!(formData as any).idFondo}
           />
@@ -179,8 +148,8 @@ export const Admin: React.FC<AdminProps> = ({ user }) => {
       case "clientes":
         return (
           <ClienteForm
-            formData={formData}
-            onInputChange={handleInputChange}
+            formData={formData as any}
+            onInputChange={handleFormEvent}
             onSubmit={handleSubmit}
             isEditMode={!!(formData as any).idCliente}
             fondos={fondos}
@@ -190,8 +159,8 @@ export const Admin: React.FC<AdminProps> = ({ user }) => {
       case "rutas":
         return (
           <RutaForm
-            formData={formData}
-            onInputChange={handleInputChange}
+            formData={formData as any}
+            onInputChange={handleFormEvent}
             onSubmit={handleSubmit}
             isEditMode={!!(formData as any).idRutaLlegada}
           />
@@ -200,8 +169,8 @@ export const Admin: React.FC<AdminProps> = ({ user }) => {
       case "servicios":
         return (
           <ServicioForm
-            formData={formData}
-            onInputChange={handleInputChange}
+            formData={formData as any}
+            onInputChange={handleFormEvent}
             onSubmit={handleSubmit}
             isEditMode={!!(formData as any).idServicio}
             checkin={checkin}
@@ -214,8 +183,8 @@ export const Admin: React.FC<AdminProps> = ({ user }) => {
       case "fechasCierre":
         return (
           <FechaCierreForm
-            formData={formData}
-            onInputChange={handleInputChange}
+            formData={formData as any}
+            onInputChange={handleFormEvent}
             onSubmit={handleSubmit}
             isEditMode={!!(formData as any).idFechaCierre}
             usuarios={usuarios}
@@ -227,8 +196,8 @@ export const Admin: React.FC<AdminProps> = ({ user }) => {
       case "sedes":
         return (
           <SedeForm
-            formData={formData}
-            onInputChange={handleInputChange}
+            formData={formData as any}
+            onInputChange={handleFormEvent}
             onSubmit={handleSubmit}
             isEditMode={!!(formData as any).idSede}
           />
@@ -239,19 +208,95 @@ export const Admin: React.FC<AdminProps> = ({ user }) => {
     }
   };
 
-  // --------- Carga / Errores ----------
-  if (loading) return <Informa text="Cargando..." btntxt="si" log={false} />;
-  if (error) return <Informa text={error} btntxt="Cerrar sesión" log={true} />;
-  if (!usuarios.length)
-    return (
-      <Informa
-        text="No se encontraron datos"
-        btntxt="Volver para iniciar sesión"
-        log={true}
-      />
-    );
+  // --------- Tablas ---------
+  const renderTable = () => {
+    switch (selectedTable) {
+      case "usuarios":
+        return (
+          <DataTableUsuarios
+            data={usuarios}
+            onEdit={handleEdit}
+            onDelete={handleDelete}
+            user={user as any}
+          />
+        );
 
-  // --------- Render principal ----------
+      case "fondos":
+        return (
+          <DataTableFondos
+            data={fondos}
+            onEdit={handleEdit}
+            onDelete={handleDelete}
+            user={user as any}
+            mode="admin"
+          />
+        );
+
+      case "clientes":
+        return (
+          <DataTableClientes
+            data={clientes}
+            onEdit={handleEdit}
+            onDelete={handleDelete}
+            user={user as any}
+          />
+        );
+
+      case "rutas":
+        return (
+          <DataTableRutas
+            data={rutas}
+            onEdit={handleEdit}
+            onDelete={handleDelete}
+            user={user as any}
+          />
+        );
+
+      case "checkins":
+        return (
+          <DataTableCheckin
+            data={checkin}
+            onEdit={handleEditCheckin}
+            onDelete={handleDeleteCheckin}
+            user={user as any}
+          />
+        );
+
+      case "servicios":
+        return (
+          <ServiciosTable
+            data={servicios}
+            onEdit={handleEdit}
+            onDelete={handleDelete}
+            user={user as any}
+          />
+        );
+
+      case "fechasCierre":
+        return (
+          <DataTableFechasCierre
+            data={fechasCierre}
+            onEdit={handleEdit}
+            onDelete={handleDelete}
+            user={user as any}
+          />
+        );
+
+      case "sedes":
+        return (
+          <DataTableSedes
+            data={sedes}
+            onEdit={handleEdit}
+            onDelete={handleDelete}
+            user={user as any}
+          />
+        );
+
+      default:
+        return null;
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-bl from-slate-400 to-cyan-800">
       <TopPage user={usuarios[0]} />
@@ -264,10 +309,13 @@ export const Admin: React.FC<AdminProps> = ({ user }) => {
 
           <MenuBotones
             opciones={opcionesAdmin}
+            estados={estados}
+            setEstados={setEstados}
             activeKey={selectedTable}
             onSelect={(id) => {
-              setSelectedTable(id); // "", "usuarios", etc.
-              if (!id) resetForm();
+              // al hacer click, seteamos la tabla y limpiamos el form
+              setSelectedTable(id);
+              resetForm();
             }}
             onResetSelection={() => {
               setSelectedTable("");
@@ -292,3 +340,5 @@ export const Admin: React.FC<AdminProps> = ({ user }) => {
     </div>
   );
 };
+
+export default Admin;

@@ -1,50 +1,110 @@
-// @/app/api/usuarios/route.ts
-
+// src/app/api/usuarios/route.ts
 import { NextResponse } from "next/server";
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "@/lib/prisma";
 
-const prisma = new PrismaClient();
-
-export async function GET(request: Request) {
+/**
+ * GET /api/usuarios
+ *   ?email=...   -> filtra por email exacto
+ *   ?q=...       -> búsqueda parcial por nombre, apellido o email
+ */
+export async function GET(req: Request) {
   try {
-    const url = new URL(request.url);
-    const email = url.searchParams.get("email"); // Obtener el correo de la query
+    const { searchParams } = new URL(req.url);
+    const email = searchParams.get("email") || undefined;
+    const q = searchParams.get("q") || undefined;
 
-    if (!email) {
+    const where: any = {};
+    if (email) where.email = email;
+    if (q) {
+      where.OR = [
+        { name: { contains: q, mode: "insensitive" } },
+        { lastname: { contains: q, mode: "insensitive" } },
+        { email: { contains: q, mode: "insensitive" } },
+      ];
+    }
+
+    const users = await prisma.usuario.findMany({
+      where,
+      orderBy: { idUsuario: "asc" },
+      include: {
+        sede: { select: { idSede: true, nombre: true } },
+      },
+    });
+
+    return NextResponse.json({ users }, { status: 200 });
+  } catch (e) {
+    console.error("[GET /api/usuarios] error:", e);
+    return NextResponse.json(
+      { error: "Error del servidor listando usuarios." },
+      { status: 500 }
+    );
+  }
+}
+
+/**
+ * POST /api/usuarios
+ *  Body JSON:
+ *   {
+ *     "name": "...",
+ *     "lastname": "...",
+ *     "email": "...",
+ *     "password": "...",
+ *     "role": "administrador" | "digitador" | "operario" | "checkinero",
+ *     "status": "Activo" | "Inactivo",
+ *     "sedeId": 1 // opcional
+ *   }
+ */
+export async function POST(req: Request) {
+  try {
+    const body = await req.json();
+
+    const {
+      name,
+      lastname,
+      email,
+      password,
+      role,
+      status,
+      sedeId,
+    } = body ?? {};
+
+    // Validación simple
+    if (!name || !lastname || !email || !password || !role || !status) {
       return NextResponse.json(
-        { error: "El correo es requerido" },
+        { error: "Faltan campos requeridos." },
         { status: 400 }
       );
     }
 
-    // Buscar el usuario por correo
-    const usuario = await prisma.usuario.findUnique({
-      where: {
-        email: email,
+    // IMPORTANTE: role y status deben coincidir con los enums del schema.prisma
+    // Role: "checkinero" | "digitador" | "operario" | "administrador"
+    // State: "Activo" | "Inactivo"
+
+    const newUser = await prisma.usuario.create({
+      data: {
+        name,
+        lastname,
+        email,
+        password,
+        role,   // prisma valida contra enum Role
+        status, // prisma valida contra enum State
+        ...(sedeId ? { sede: { connect: { idSede: Number(sedeId) } } } : {}),
       },
-      select: {
-        idUsuario: true,
-        name: true,
-        lastname: true,
-        email: true,
-        status: true,
-        role: true,
-        sede: true,
-      },
+      include: { sede: { select: { idSede: true, nombre: true } } },
     });
 
-    if (!usuario) {
+    return NextResponse.json({ user: newUser }, { status: 201 });
+  } catch (e: any) {
+    // Prisma: unique violation (email)
+    if (e?.code === "P2002") {
       return NextResponse.json(
-        { error: "Usuario no encontrado" },
-        { status: 404 }
+        { error: "El email ya existe." },
+        { status: 409 }
       );
     }
-
-    return NextResponse.json(usuario);
-  } catch (error) {
-    console.error("Error al obtener el usuario:", error);
+    console.error("[POST /api/usuarios] error:", e);
     return NextResponse.json(
-      { error: "Error al obtener el usuario" },
+      { error: "Error del servidor creando usuario." },
       { status: 500 }
     );
   }
