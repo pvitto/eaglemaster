@@ -35,7 +35,7 @@ export function MenuBotones({
     onResetSelection?.();
     onSelect?.(opcion.id);
   };
-
+//
   return (
     <div className="flex flex-col md:flex-row gap-4 mb-6">
       {opciones.map((op) => (
