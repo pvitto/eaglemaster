@@ -69,7 +69,7 @@ export const Admin: React.FC<AdminProps> = ({ user }) => {
     formData,
     resetForm,
     toast,
-  } = useAdminLogic(user);
+  } = useAdminLogic(UsuarioForm);
 
   // Adaptador de evento -> (campo, valor) para reutilizar tu lógica actual
   const handleFormEvent = useCallback(
