@@ -1,5 +1,6 @@
-//@/components/Digitador/dataTableFondos.tsx
+// src/components/Digitador/dataTableFondos.tsx
 "use client";
+
 import * as React from "react";
 import {
   ColumnFiltersState,
@@ -11,43 +12,48 @@ import {
   getSortedRowModel,
   useReactTable,
 } from "@tanstack/react-table";
+
 import { Fondo, user } from "@/types/interfaces";
 import { Pagination } from "@/components/General/pagination";
 import { SearchBar } from "@/components/General/searchBar";
 import { TableHeader } from "@/components/General/tableHeader";
 import { TableBody } from "@/components/General/tableBody";
+import { TableActions } from "@/components/General/tableActions";
+
 import { RadioGroup } from "@/components/ui/radio-group";
 import { columns } from "@/components/Digitador/columnsFondos";
-import { TableActions } from "@/components/General/tableActions";
+
+type Mode = "admin" | "selection";
 
 interface DataTableProps {
   data: Fondo[];
+  user: user;
+
+  // Acciones admin (opcionales si estás en modo selección)
   onDelete?: (ids: number[]) => void;
   onEdit?: (id: number) => void;
-  user: user;
-  // Nuevas props para la selección
+
+  // Selección de fondo (sólo útil en modo "selection")
   onSelect?: (fondoId: number) => void;
   selectedFondoId?: number | null;
-  setSelectedServiceId?: (selectedServiceId: null) => void;
-  mode?: "admin" | "selection"; // Modo de operación
+  setSelectedServiceId?: (selectedServiceId: number | null) => void;
+
+  mode?: Mode; // "admin" (por defecto) o "selection"
 }
 
 export function DataTableFondos({
   data,
+  user,
   onDelete,
   onEdit,
-  user,
   onSelect,
   selectedFondoId,
   setSelectedServiceId,
-  mode = "admin", // Por defecto modo admin
+  mode = "admin",
 }: DataTableProps) {
   const [sorting, setSorting] = React.useState<SortingState>([]);
-  const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>(
-    []
-  );
-  const [columnVisibility, setColumnVisibility] =
-    React.useState<VisibilityState>({});
+  const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
+  const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({});
   const [rowSelection, setRowSelection] = React.useState({});
   const [filterValue, setFilterValue] = React.useState("");
 
@@ -69,25 +75,21 @@ export function DataTableFondos({
       rowSelection,
       globalFilter: filterValue,
     },
-    globalFilterFn: (row, columnId, filterValue) => {
-      const lowercaseFilter = filterValue.toLowerCase();
-      const fondo = row.original;
+    // Búsqueda global (código, nombre, tipo y nombres de clientes)
+    globalFilterFn: (row, _columnId, rawFilter) => {
+      const f = (rawFilter ?? "").toString().toLowerCase();
+      if (!f) return true;
 
-      // Buscar en campos directos
+      const fondo = row.original;
       if (
-        fondo.idFondo.toString().toLowerCase().includes(lowercaseFilter) ||
-        fondo.nombre.toLowerCase().includes(lowercaseFilter) ||
-        fondo.tipo.toLowerCase().includes(lowercaseFilter)
+        fondo.idFondo?.toString().toLowerCase().includes(f) ||
+        fondo.nombre?.toLowerCase().includes(f) ||
+        (fondo.tipo as string)?.toLowerCase().includes(f)
       ) {
         return true;
       }
 
-      // Buscar en nombres de clientes
-      if (
-        fondo.clientes?.some((cliente) =>
-          cliente.name.toLowerCase().includes(lowercaseFilter)
-        )
-      ) {
+      if (fondo.clientes?.some((c) => c.name?.toLowerCase().includes(f))) {
         return true;
       }
 
@@ -95,39 +97,37 @@ export function DataTableFondos({
     },
   });
 
+  React.useEffect(() => {
+    table.setPageSize(5);
+  }, [table]);
+
   const handleDeleteSelected = () => {
     if (!onDelete) return;
-
     const selectedIds = table
       .getSelectedRowModel()
-      .rows.map((row) => row.original.idFondo)
-      .filter((id): id is number => id !== undefined);
+      .rows.map((r) => r.original.idFondo)
+      .filter((id): id is number => typeof id === "number");
 
     if (selectedIds.length === 0) {
       alert("No se seleccionaron fondos para eliminar");
       return;
     }
-
     onDelete(selectedIds);
   };
 
-  React.useEffect(() => {
-    table.setPageSize(5);
-  }, [table]);
-
   const handleEditSelected = () => {
     if (!onEdit) return;
-
-    const selectedId = table.getSelectedRowModel().rows[0].original.idFondo;
-    if (selectedId !== undefined) {
-      onEdit(selectedId);
+    const first = table.getSelectedRowModel().rows[0];
+    const id = first?.original?.idFondo;
+    if (typeof id === "number") {
+      onEdit(id);
       table.toggleAllRowsSelected(false);
       window.scrollTo(0, 0);
     }
   };
 
-  // Contenido común para ambos modos
-  const tableContent = (
+  // --- Contenido de la tabla (sin el wrapper del RadioGroup) ---
+  const tableMarkup = (
     <>
       <div className="flex items-center py-4">
         <div className="flex justify-between w-full">
@@ -147,22 +147,24 @@ export function DataTableFondos({
 
   return (
     <div className="w-full">
-      {mode === "selection" && onSelect ? (
-        <RadioGroup
-          value={selectedFondoId?.toString() || ""}
-          onValueChange={(value) => {
-            onSelect(Number(value));
-            if (setSelectedServiceId) {
-              setSelectedServiceId(null);
+      {/* Siempre damos contexto de RadioGroup para que los RadioGroupItem en la columna "select" nunca queden huérfanos */}
+      <RadioGroup
+        value={mode === "selection" ? (selectedFondoId?.toString() || "") : ""}
+        onValueChange={
+          mode === "selection"
+            ? (value: string) => {
+              const id = Number(value);
+              if (!Number.isNaN(id)) {
+                onSelect?.(id);
+                setSelectedServiceId?.(null);
+              }
             }
-          }}
-          className="space-y-4"
-        >
-          {tableContent}
-        </RadioGroup>
-      ) : (
-        tableContent
-      )}
+            : () => {} // no-op en modo admin; sólo provee el contexto
+        }
+        className="space-y-4"
+      >
+        {tableMarkup}
+      </RadioGroup>
 
       <div className="flex items-center justify-between py-4">
         {mode === "admin" && (
@@ -171,6 +173,7 @@ export function DataTableFondos({
             {table.getFilteredRowModel().rows.length} fila(s) seleccionadas.
           </div>
         )}
+
         <div className="flex items-center space-x-2">
           {mode === "admin" && user.role === "administrador" && (
             <TableActions
