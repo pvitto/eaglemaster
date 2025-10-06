@@ -1,23 +1,29 @@
-//@/app/logout/page.tsx
+// src/app/logout/page.tsx
 "use client";
-import { useEffect } from "react";
-import { useRouter } from "next/navigation";
+
 import { signOut } from "next-auth/react";
-import { Informa } from "@/components/General/informa";
+import { useEffect } from "react";
 
-export default function Logout() {
-  const router = useRouter();
-
+export default function LogoutPage() {
   useEffect(() => {
-    // Eliminar cualquier dato de sesión o cookies
-    const handleLogOut = async () => {
-      await signOut({
-        callbackUrl: "/",
-      });
+    const doLogout = async () => {
+      try {
+        // 👇 signOut no devuelve JSON, simplemente redirige o limpia sesión
+        await signOut({
+          callbackUrl: "/", // a dónde quieres mandar después del logout
+          redirect: true,   // 🔑 importante para evitar que intente parsear
+        });
+      } catch (error) {
+        console.error("Error al cerrar sesión:", error);
+      }
     };
 
-    handleLogOut();
-  }, [router]);
+    doLogout();
+  }, []);
 
-  return <Informa text="Cerrando sesion..." btntxt="nope" log={false} />;
+  return (
+    <div className="flex h-screen items-center justify-center bg-gradient-to-bl from-slate-400 to-cyan-800 text-white">
+      <h1 className="text-2xl font-bold">Cerrando sesión...</h1>
+    </div>
+  );
 }

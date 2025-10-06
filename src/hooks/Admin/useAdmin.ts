@@ -1,13 +1,15 @@
-import { useEffect, useState, type FormEvent } from "react";
-import { user as AppUser, FechaCierre, Sede } from "@/types/interfaces";
+"use client";
+
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useToast } from "@/hooks/General/use-toast";
 import { useFetchData } from "@/hooks/General/useFetchData";
 import { opcionesAdmin } from "@/components/Admin/opcionesAdmin";
 
-export function useAdminLogic(currentUser?: AppUser) {
+type AnyObj = Record<string, any>;
+
+export function useAdminLogic(currentUserEmail?: string) {
   const { toast } = useToast();
 
-  // Carga de datos principales
   const {
     usuarios,
     fondos,
@@ -17,357 +19,198 @@ export function useAdminLogic(currentUser?: AppUser) {
     checkin,
     loading,
     error,
-
-    // setters para actualizaciones locales
     setUsuarios,
     setFondos,
     setClientes,
     setRutas,
     setServicios,
     setCheckin,
-  } = useFetchData(currentUser?.email ?? "");
+  } = useFetchData(currentUserEmail || "");
 
-  // -------- UI (menú/selección) --------
-  const initialEstados = Object.fromEntries(
-    opcionesAdmin.map((o) => [o.estadoKey, false])
+  const initialEstados = useMemo(
+    () => Object.fromEntries(opcionesAdmin.map((o) => [o.estadoKey, false])),
+    []
   );
   const [estados, setEstados] = useState<Record<string, boolean>>(initialEstados);
   const [selectedTable, setSelectedTable] = useState<string>("");
+  const [formData, setFormData] = useState<AnyObj>({});
 
-  // Otros catálogos
-  const [fechasCierre, setFechasCierre] = useState<FechaCierre[]>([]);
-  const [sedes, setSedes] = useState<Sede[]>([]);
+  const [sedes, setSedes] = useState<any[]>([]);
+  const [fechasCierre, setFechasCierre] = useState<any[]>([]);
 
-  // Form genérico
-  const [formData, setFormData] = useState<any>({});
-
+  // cargar sedes y fechas
   useEffect(() => {
-    const fetchSedes = async () => {
+    const loadSedes = async () => {
       try {
-        const res = await fetch("/api/sedes");
-        if (!res.ok) throw new Error("Error al cargar sedes");
-        setSedes(await res.json());
-      } catch (err) {
-        console.error("Error fetching sedes:", err);
+        const r = await fetch("/api/sedes", { cache: "no-store" });
+        setSedes(r.ok ? await r.json() : []);
+      } catch (e) {
+        console.error("[useAdmin] loadSedes:", e);
       }
     };
-
-    const fetchFechasCierre = async () => {
+    const loadFechas = async () => {
       try {
-        const res = await fetch("/api/fechacierre");
-        if (!res.ok) throw new Error("Error al cargar fechas de cierre");
-        setFechasCierre(await res.json());
-      } catch (err) {
-        console.error("Error fetching fechas de cierre:", err);
+        const r = await fetch("/api/fechacierre", { cache: "no-store" });
+        setFechasCierre(r.ok ? await r.json() : []);
+      } catch (e) {
+        console.error("[useAdmin] loadFechas:", e);
       }
     };
-
-    fetchSedes();
-    fetchFechasCierre();
+    loadSedes();
+    loadFechas();
   }, []);
 
   const resetForm = () => setFormData({});
 
-  // -------- Edit --------
-  const handleEdit = (id: number) => {
-    let itemToEdit: any;
-    switch (selectedTable) {
+  // ---------- Build Payload ----------
+  const buildPayload = useCallback((table: string, raw: AnyObj) => {
+    switch (table) {
       case "usuarios":
-        itemToEdit = usuarios.find((u) => u.idUsuario === id);
-        break;
+        return {
+          idUsuario: raw.idUsuario ?? undefined,
+          name: raw.name ?? "",
+          lastname: raw.lastname ?? "",
+          email: (raw.email ?? "").trim(),
+          password: raw.password ?? "",
+          role: raw.role ?? "",
+          status: raw.status ?? "",
+          sedeId: raw.sedeId ? Number(raw.sedeId) : null,
+        };
       case "fondos":
-        itemToEdit = fondos.find((f) => f.idFondo === id);
-        break;
-      case "clientes":
-        itemToEdit = clientes.find((c) => c.idCliente === id);
-        break;
-      case "rutas":
-        itemToEdit = rutas.find((r) => r.idRutaLlegada === id);
-        break;
-      case "servicios":
-        itemToEdit = servicios.find((s) => s.idServicio === id);
-        break;
-      case "fechasCierre":
-        itemToEdit = fechasCierre.find((f) => f.idFechaCierre === id);
-        break;
-      case "sedes":
-        itemToEdit = sedes.find((s) => s.idSede === id);
-        break;
+        return { idFondo: raw.idFondo, nombre: raw.nombre ?? "", tipo: raw.tipo ?? "" };
+      default:
+        return raw ?? {};
     }
-    if (itemToEdit) setFormData(itemToEdit);
-  };
+  }, []);
 
-  // -------- Delete --------
-  const handleDelete = async (ids: number[]) => {
-    try {
-      if (!ids?.length) throw new Error("No se seleccionaron elementos");
+  // ---------- Helpers ----------
+  const handleInputChange = useCallback((name: string, value: any) => {
+    setFormData((prev) => ({ ...prev, [name]: value }));
+  }, []);
 
-      let endpoint = "";
+  const handleEdit = useCallback(
+    (id: number) => {
+      let item: AnyObj | undefined;
       switch (selectedTable) {
         case "usuarios":
-          endpoint = "/api/usuarios";
+          item = usuarios.find((u) => u.idUsuario === id);
           break;
         case "fondos":
-          endpoint = "/api/fondos";
+          item = fondos.find((f) => f.idFondo === id);
           break;
-        case "clientes":
-          endpoint = "/api/clientes";
-          break;
-        case "rutas":
-          endpoint = "/api/rutas";
-          break;
-        case "servicios":
-          endpoint = "/api/servicio";
-          break;
-        case "fechasCierre":
-          endpoint = "/api/fechacierre";
-          break;
-        case "sedes":
-          endpoint = "/api/sedes";
-          break;
-        default:
-          throw new Error("Tabla no válida");
       }
+      if (item) setFormData(item);
+    },
+    [selectedTable, usuarios, fondos]
+  );
+
+  const handleDelete = useCallback(
+    async (ids: number[]) => {
+      if (!ids?.length) {
+        toast({ title: "Error", description: "No seleccionaste nada", variant: "destructive" });
+        return;
+      }
+
+      let endpoint = "";
+      if (selectedTable === "usuarios") endpoint = "/api/usuarios";
+      if (selectedTable === "fondos") endpoint = "/api/fondos";
 
       const res = await fetch(endpoint, {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ids }),
       });
+
       if (!res.ok) {
-        let msg = "Error al eliminar";
-        try {
-          const j = await res.json();
-          msg = j?.error ?? msg;
-        } catch {}
-        throw new Error(msg);
+        toast({ title: "Error", description: "No se pudo eliminar", variant: "destructive" });
+        return;
       }
 
-      // Actualiza estados locales
-      switch (selectedTable) {
-        case "usuarios":
-          setUsuarios(usuarios.filter((u) => !ids.includes(u.idUsuario)));
-          break;
-        case "fondos":
-          setFondos(fondos.filter((f) => !ids.includes(f.idFondo)));
-          break;
-        case "clientes":
-          setClientes(clientes.filter((c) => !ids.includes(c.idCliente)));
-          break;
-        case "rutas":
-          setRutas(rutas.filter((r) => !ids.includes(r.idRutaLlegada)));
-          break;
-        case "servicios":
-          setServicios(servicios.filter((s) => !ids.includes(s.idServicio || 0)));
-          break;
-        case "fechasCierre":
-          setFechasCierre(
-            fechasCierre.filter((f) => !ids.includes(f.idFechaCierre))
-          );
-          break;
-        case "sedes":
-          setSedes(sedes.filter((s) => !ids.includes(s.idSede)));
-          break;
-      }
+      if (selectedTable === "usuarios")
+        setUsuarios(usuarios.filter((x) => !ids.includes(x.idUsuario)));
+      if (selectedTable === "fondos")
+        setFondos(fondos.filter((x) => !ids.includes(x.idFondo)));
 
-      toast({
-        title: "Éxito",
-        description: "Elementos eliminados correctamente",
-        variant: "normal",
-      });
-    } catch (err) {
-      console.error(err);
-      toast({
-        title: "Error",
-        description:
-          err instanceof Error ? err.message : "Error desconocido",
-        variant: "destructive",
-      });
-    }
-  };
+      toast({ title: "Éxito", description: "Eliminado correctamente", variant: "normal" });
+    },
+    [selectedTable, usuarios, fondos, toast, setUsuarios, setFondos]
+  );
 
-  // -------- Input genérico (campo, valor) --------
-  const handleInputChange = (name: string, value: any) => {
-    setFormData((prev: any) => ({
-      ...prev,
-      [name]: value,
-    }));
-  };
+  const handleSubmit = useCallback(
+    async (e: React.FormEvent<HTMLFormElement>) => {
+      e.preventDefault();
 
-  // -------- Submit --------
-  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    try {
+      const payload = buildPayload(selectedTable, formData);
+
       let endpoint = "";
       let method: "POST" | "PUT" = "POST";
-
-      switch (selectedTable) {
-        case "usuarios":
-          endpoint = "/api/usuarios";
-          method = formData.idUsuario ? "PUT" : "POST";
-          break;
-        case "fondos":
-          endpoint = "/api/fondos";
-          method = formData.idFondo ? "PUT" : "POST";
-          break;
-        case "clientes":
-          endpoint = "/api/clientes";
-          method = formData.idCliente ? "PUT" : "POST";
-          break;
-        case "rutas":
-          endpoint = "/api/rutas";
-          method = formData.idRutaLlegada ? "PUT" : "POST";
-          break;
-        case "servicios":
-          endpoint = "/api/servicio";
-          method = formData.idServicio ? "PUT" : "POST";
-          break;
-        case "fechasCierre":
-          endpoint = "/api/fechacierre";
-          method = formData.idFechaCierre ? "PUT" : "POST";
-          break;
-        case "sedes":
-          endpoint = "/api/sedes";
-          method = formData.idSede ? "PUT" : "POST";
-          break;
-        default:
-          throw new Error("Tabla no válida");
+      if (selectedTable === "usuarios") {
+        endpoint = "/api/usuarios";
+        method = payload.idUsuario ? "PUT" : "POST";
+      }
+      if (selectedTable === "fondos") {
+        endpoint = "/api/fondos";
+        method = payload.idFondo ? "PUT" : "POST";
       }
 
       const res = await fetch(endpoint, {
         method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(payload),
       });
 
       if (!res.ok) {
-        let msg = "Error en la solicitud";
-        try {
-          const j = await res.json();
-          msg = j?.error ?? msg;
-        } catch {}
-        throw new Error(msg);
-      }
-
-      const result = await res.json();
-
-      // Actualiza estado local según método
-      switch (selectedTable) {
-        case "usuarios":
-          setUsuarios(
-            method === "POST"
-              ? [...usuarios, result]
-              : usuarios.map((u) =>
-                  u.idUsuario === result.idUsuario ? result : u
-                )
-          );
-          break;
-        case "fondos":
-          setFondos(
-            method === "POST"
-              ? [...fondos, result]
-              : fondos.map((f) => (f.idFondo === result.idFondo ? result : f))
-          );
-          break;
-        case "clientes":
-          setClientes(
-            method === "POST"
-              ? [...clientes, result]
-              : clientes.map((c) =>
-                  c.idCliente === result.idCliente ? result : c
-                )
-          );
-          break;
-        case "rutas":
-          setRutas(
-            method === "POST"
-              ? [...rutas, result]
-              : rutas.map((r) =>
-                  r.idRutaLlegada === result.idRutaLlegada ? result : r
-                )
-          );
-          break;
-        case "servicios":
-          setServicios(
-            method === "POST"
-              ? [...servicios, result]
-              : servicios.map((s) =>
-                  s.idServicio === result.idServicio ? result : s
-                )
-          );
-          break;
-        case "fechasCierre":
-          setFechasCierre(
-            method === "POST"
-              ? [...fechasCierre, result]
-              : fechasCierre.map((f) =>
-                  f.idFechaCierre === result.idFechaCierre ? result : f
-                )
-          );
-          break;
-        case "sedes":
-          setSedes(
-            method === "POST"
-              ? [...sedes, result]
-              : sedes.map((s) => (s.idSede === result.idSede ? result : s))
-          );
-          break;
+        toast({ title: "Error", description: "Error en guardar", variant: "destructive" });
+        return;
       }
 
       toast({
         title: "Éxito",
-        description: `Elemento ${
-          method === "POST" ? "creado" : "actualizado"
-        } correctamente`,
+        description: method === "POST" ? "Creado correctamente" : "Actualizado correctamente",
         variant: "normal",
       });
-
       resetForm();
-    } catch (err) {
-      console.error(err);
-      toast({
-        title: "Error",
-        description:
-          err instanceof Error ? err.message : "Error desconocido",
-        variant: "destructive",
-      });
-    }
-  };
+    },
+    [selectedTable, formData, buildPayload, toast]
+  );
 
+  // ---------- Return ----------
   return {
-    // datos
     usuarios,
     fondos,
     clientes,
     rutas,
     servicios,
     fechasCierre,
-    sedes,
     checkin,
 
-    // estado UI
     estados,
     setEstados,
     selectedTable,
     setSelectedTable,
 
-    // estado red
     loading,
     error,
 
-    // setters para hooks auxiliares
+    sedes,
+    setSedes,
+    setFechasCierre,
+
+    setUsuarios,
+    setFondos,
+    setClientes,
+    setRutas,
+    setServicios,
     setCheckin,
 
-    // CRUD + form
-    handleDelete,
-    handleEdit,
-    handleSubmit,
-    handleInputChange,
     formData,
     setFormData,
     resetForm,
+    handleInputChange,
+    handleEdit,
+    handleDelete,
+    handleSubmit,
 
-    // util
     toast,
   };
 }

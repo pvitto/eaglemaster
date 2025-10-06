@@ -1,14 +1,15 @@
-// src/components/Admin/clienteForm.tsx
+"use client";
+
+import React from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import type { Fondo, Sede } from "@/types/interfaces";
-import React from "react";
 
 export interface ClienteFormData {
   idCliente?: number;
   name?: string;
-  fondoId?: number | string; // llega como string desde <select>
-  sedeId?: number | string | null; // opcional
+  fondoId?: number | string;
+  sedeId?: number | string | null;
 }
 
 interface ClienteFormProps {
@@ -18,18 +19,20 @@ interface ClienteFormProps {
   ) => void;
   onSubmit: (e: React.FormEvent<HTMLFormElement>) => void;
   isEditMode: boolean;
-  fondos: Fondo[];
-  sedes: Sede[];
+  fondos?: Fondo[]; // opcionales para tolerar undefined
+  sedes?: Sede[];   // opcionales para tolerar undefined
 }
 
-export const ClienteForm: React.FC<ClienteFormProps> = ({
-  formData,
-  onInputChange,
-  onSubmit,
-  isEditMode,
-  fondos,
-  sedes,
-}) => {
+const ClienteForm: React.FC<ClienteFormProps> = (props) => {
+  const {
+    formData,
+    onInputChange,
+    onSubmit,
+    isEditMode,
+    fondos = [],
+    sedes = [],
+  } = props;
+
   return (
     <Card className="bg-white p-6 rounded-lg shadow mb-6">
       <form onSubmit={onSubmit}>
@@ -105,3 +108,5 @@ export const ClienteForm: React.FC<ClienteFormProps> = ({
     </Card>
   );
 };
+
+export default ClienteForm;

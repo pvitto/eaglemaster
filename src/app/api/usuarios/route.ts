@@ -2,110 +2,78 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
-/**
- * GET /api/usuarios
- *   ?email=...   -> filtra por email exacto
- *   ?q=...       -> búsqueda parcial por nombre, apellido o email
- */
-export async function GET(req: Request) {
+// POST /api/usuarios  -> crear
+export async function POST(req: Request) {
   try {
-    const { searchParams } = new URL(req.url);
-    const email = searchParams.get("email") || undefined;
-    const q = searchParams.get("q") || undefined;
+    const payload = await req.json();
+    console.log("[API usuarios][POST] payload:", payload);
 
-    const where: any = {};
-    if (email) where.email = email;
-    if (q) {
-      where.OR = [
-        { name: { contains: q, mode: "insensitive" } },
-        { lastname: { contains: q, mode: "insensitive" } },
-        { email: { contains: q, mode: "insensitive" } },
-      ];
-    }
+    // ⚠️ AJUSTA estos nombres a tu schema.prisma (esto es un EJEMPLO)
+    // Si en schema el modelo Usuario tiene name, lastname, email, password, role, status, sedeId:
+    const data = {
+      name: payload.nombre,          // <-- mapeo 'nombre' (front) -> 'name' (DB)
+      lastname: payload.apellido,    // <-- idem
+      email: payload.email,
+      password: payload.password,
+      role: payload.rol,             // 'rol' (front) -> 'role' (DB)
+      status: payload.estado,        // 'estado' (front) -> 'status' (DB)
+      sedeId: payload.sedeId ?? null // opcional
+    };
 
-    const users = await prisma.usuario.findMany({
-      where,
-      orderBy: { idUsuario: "asc" },
-      include: {
-        sede: { select: { idSede: true, nombre: true } },
-      },
-    });
+    console.log("[API usuarios][POST] data para Prisma:", data);
 
-    return NextResponse.json({ users }, { status: 200 });
-  } catch (e) {
-    console.error("[GET /api/usuarios] error:", e);
+    const created = await prisma.usuario.create({ data });
+    console.log("[API usuarios][POST] created:", created);
+
+    return NextResponse.json(created, { status: 201 });
+  } catch (err: any) {
+    console.error("[API usuarios][POST] error:", err);
     return NextResponse.json(
-      { error: "Error del servidor listando usuarios." },
-      { status: 500 }
+      { error: err?.message || "Error creando usuario" },
+      { status: 400 }
     );
   }
 }
 
-/**
- * POST /api/usuarios
- *  Body JSON:
- *   {
- *     "name": "...",
- *     "lastname": "...",
- *     "email": "...",
- *     "password": "...",
- *     "role": "administrador" | "digitador" | "operario" | "checkinero",
- *     "status": "Activo" | "Inactivo",
- *     "sedeId": 1 // opcional
- *   }
- */
-export async function POST(req: Request) {
+// PUT /api/usuarios  -> actualizar
+export async function PUT(req: Request) {
   try {
-    const body = await req.json();
+    const payload = await req.json();
+    console.log("[API usuarios][PUT] payload:", payload);
 
-    const {
-      name,
-      lastname,
-      email,
-      password,
-      role,
-      status,
-      sedeId,
-    } = body ?? {};
-
-    // Validación simple
-    if (!name || !lastname || !email || !password || !role || !status) {
+    const id = Number(payload.idUsuario);
+    if (!id) {
       return NextResponse.json(
-        { error: "Faltan campos requeridos." },
+        { error: "idUsuario es requerido" },
         { status: 400 }
       );
     }
 
-    // IMPORTANTE: role y status deben coincidir con los enums del schema.prisma
-    // Role: "checkinero" | "digitador" | "operario" | "administrador"
-    // State: "Activo" | "Inactivo"
+    // ⚠️ AJUSTA nombres a tu schema.prisma
+    const data = {
+      name: payload.nombre,
+      lastname: payload.apellido,
+      email: payload.email,
+      password: payload.password,
+      role: payload.rol,
+      status: payload.estado,
+      sedeId: payload.sedeId ?? null
+    };
 
-    const newUser = await prisma.usuario.create({
-      data: {
-        name,
-        lastname,
-        email,
-        password,
-        role,   // prisma valida contra enum Role
-        status, // prisma valida contra enum State
-        ...(sedeId ? { sede: { connect: { idSede: Number(sedeId) } } } : {}),
-      },
-      include: { sede: { select: { idSede: true, nombre: true } } },
+    console.log("[API usuarios][PUT] data para Prisma:", { id, data });
+
+    const updated = await prisma.usuario.update({
+      where: { idUsuario: id }, // o { id: id } según tu modelo
+      data,
     });
+    console.log("[API usuarios][PUT] updated:", updated);
 
-    return NextResponse.json({ user: newUser }, { status: 201 });
-  } catch (e: any) {
-    // Prisma: unique violation (email)
-    if (e?.code === "P2002") {
-      return NextResponse.json(
-        { error: "El email ya existe." },
-        { status: 409 }
-      );
-    }
-    console.error("[POST /api/usuarios] error:", e);
+    return NextResponse.json(updated, { status: 200 });
+  } catch (err: any) {
+    console.error("[API usuarios][PUT] error:", err);
     return NextResponse.json(
-      { error: "Error del servidor creando usuario." },
-      { status: 500 }
+      { error: err?.message || "Error actualizando usuario" },
+      { status: 400 }
     );
   }
 }

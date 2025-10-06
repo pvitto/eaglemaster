@@ -1,97 +1,76 @@
-// @/components/auth/LoginForm.tsx
 "use client";
+
 import { useState } from "react";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
-import { Button } from "@/components/ui/button";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
-import { loginSchema } from "@/lib/loginShema";
-import { LoginAction } from "@/actions/auth-action";
+import { signIn } from "next-auth/react";
 
-type LoginFormValues = z.infer<typeof loginSchema>;
+type Props = {
+  onSuccess?: () => void;               // opcional
+  onError?: (msg: string) => void;      // opcional
+};
 
-interface LoginFormProps {
-  onSuccess: () => void;
-  onError: (error: string) => void;
-}
-
-export function LoginForm({ onSuccess, onError }: LoginFormProps) {
+export default function LoginForm({ onSuccess, onError }: Props) {
+  const [email, setEmail] = useState("admin@demo.local");
+  const [password, setPassword] = useState("Admin123*");
   const [isPending, setIsPending] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
 
-  const form = useForm<LoginFormValues>({
-    resolver: zodResolver(loginSchema),
-    defaultValues: {
-      email: "",
-      password: "",
-    },
-  });
-
-  const onSubmit = async (data: LoginFormValues) => {
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
     setIsPending(true);
-    const response = await LoginAction(data);
+    setMsg(null);
 
-    if (response.error) {
-      onError(response.error);
-    } else {
-      onSuccess();
+    const result = await signIn("credentials", {
+      redirect: false,
+      email,
+      password,
+    });
+
+    if (!result || result.error) {
+      const err = result?.error ?? "Error de autenticación";
+      setMsg(err);
+      onError?.(err);
+      setIsPending(false);
+      return;
     }
+
+    onSuccess?.();
     setIsPending(false);
   };
 
   return (
-    <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-        <FormField
-          control={form.control}
-          name="email"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel className="text-gray-700">Usuario:</FormLabel>
-              <FormControl>
-                <Input
-                  type="email"
-                  placeholder="Ingresa tu usuario"
-                  {...field}
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={form.control}
-          name="password"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel className="text-gray-700">Contraseña:</FormLabel>
-              <FormControl>
-                <Input
-                  type="password"
-                  placeholder="Ingresa tu contraseña"
-                  {...field}
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <Button
-          disabled={isPending}
-          type="submit"
-          className="w-full px-4 py-2 font-bold"
-        >
-          Entrar
-        </Button>
-      </form>
-    </Form>
+    <form
+      onSubmit={handleSubmit}
+      className="bg-white p-8 rounded-lg shadow w-[420px]"
+    >
+      <h1 className="text-2xl font-bold text-center mb-6">Iniciar Sesión</h1>
+
+      {msg && <p className="text-center text-red-600 mb-4">{msg}</p>}
+
+      <label className="block text-sm mb-1">Usuario:</label>
+      <input
+        className="w-full border rounded p-2 mb-4 bg-slate-50"
+        type="email"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        autoComplete="username"
+      />
+
+      <label className="block text-sm mb-1">Contraseña:</label>
+      <input
+        className="w-full border rounded p-2 mb-6 bg-slate-50"
+        type="password"
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+        autoComplete="current-password"
+      />
+
+      <button
+        type="submit"
+        disabled={isPending}
+        className="w-full bg-teal-700 text-white font-semibold py-2 rounded disabled:opacity-60"
+      >
+        {isPending ? "Entrando..." : "Entrar"}
+      </button>
+    </form>
   );
 }

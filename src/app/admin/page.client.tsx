@@ -5,7 +5,6 @@ import { useCallback, type ChangeEvent } from "react";
 import { Card } from "@/components/ui/card";
 import { Informa } from "@/components/General/informa";
 import { TopPage } from "@/components/General/topPage";
-
 import { MenuBotones } from "@/components/General/menuBotones";
 import { opcionesAdmin } from "@/components/Admin/opcionesAdmin";
 
@@ -26,7 +25,7 @@ import { ServiciosTable } from "@/components/Digitador/serviciosTable";
 // Formularios
 import { UsuarioForm } from "@/components/Admin/usuarioForm";
 import { FondoForm } from "@/components/Admin/fondoForm";
-import { ClienteForm } from "@/components/Admin/clienteForm";
+import ClienteForm from "@/components/Admin/clienteForm";
 import { RutaForm } from "@/components/Admin/rutaForm";
 import { ServicioForm } from "@/components/Admin/servicioForm";
 import { FechaCierreForm } from "@/components/Admin/fechaCierreForm";
@@ -35,12 +34,12 @@ import { SedeForm } from "@/components/Admin/sedeForm";
 import type { user as AppUser } from "@/types/interfaces";
 
 type AdminProps = {
-  user?: AppUser;
+  user?: AppUser | null;
+  error?: string | null;
 };
 
-export const Admin: React.FC<AdminProps> = ({ user }) => {
+export const Admin: React.FC<AdminProps> = ({ user, error }) => {
   const {
-    // datos
     usuarios,
     fondos,
     clientes,
@@ -50,32 +49,25 @@ export const Admin: React.FC<AdminProps> = ({ user }) => {
     sedes,
     checkin,
 
-    // estado UI
     estados,
     setEstados,
     selectedTable,
     setSelectedTable,
 
-    // estado de red
     loading,
-    error,
+    error: hookError,
 
-    // CRUD helpers
     handleDelete,
     handleEdit,
-    handleSubmit,                 // (e: FormEvent) => Promise<void>
-    handleInputChange,            // (name: string, value: any) => void
+    handleSubmit,
+    handleInputChange,
     formData,
     resetForm,
 
-    // para checkin hook
     setCheckin,
-
-    // util
     toast,
-  } = useAdminLogic(user);
+  } = useAdminLogic(user?.email ?? undefined);
 
-  // Adaptador: evento DOM -> (campo, valor) que espera useAdmin
   const handleFormEvent = useCallback(
     (
       e: ChangeEvent<
@@ -83,11 +75,9 @@ export const Admin: React.FC<AdminProps> = ({ user }) => {
       >
     ) => {
       const t = e.target as HTMLInputElement;
-      let value: any = t.type === "checkbox" ? t.checked : t.value;
-
+      let value: any = t.type === "checkbox" ? (t as HTMLInputElement).checked : t.value;
       if (t.type === "number") value = Number(t.value);
 
-      // ids opcionales que pueden ser number | null
       const mayBeId = [
         "sedeId",
         "idCliente",
@@ -106,14 +96,12 @@ export const Admin: React.FC<AdminProps> = ({ user }) => {
     [handleInputChange]
   );
 
-  // Hooks específicos de checkin (edición desde tabla)
   const { handleEdit: handleEditCheckin, handleDelete: handleDeleteCheckin } =
     useCheckinForm(initialFormData, clientes, checkin, setCheckin, toast);
 
-  // --------- Carga / errores ---------
   if (loading) return <Informa text="Cargando..." btntxt="si" log={false} />;
-  if (error)
-    return <Informa text={error} btntxt="Cerrar sesión" log={true} />;
+  if (error || hookError)
+    return <Informa text={error ?? hookError ?? "Error"} btntxt="Cerrar sesión" log={true} />;
 
   if (!usuarios.length) {
     return (
@@ -125,7 +113,6 @@ export const Admin: React.FC<AdminProps> = ({ user }) => {
     );
   }
 
-  // --------- Formularios ---------
   const renderForm = () => {
     switch (selectedTable) {
       case "usuarios":
@@ -155,6 +142,7 @@ export const Admin: React.FC<AdminProps> = ({ user }) => {
             onSubmit={handleSubmit}
             isEditMode={!!(formData as any).idCliente}
             fondos={fondos}
+            sedes={sedes}
           />
         );
       case "rutas":
@@ -205,7 +193,6 @@ export const Admin: React.FC<AdminProps> = ({ user }) => {
     }
   };
 
-  // --------- Tablas ---------
   const renderTable = () => {
     switch (selectedTable) {
       case "usuarios":
@@ -272,7 +259,7 @@ export const Admin: React.FC<AdminProps> = ({ user }) => {
             user={user as any}
           />
         );
-      case "sedes":
+      case "sede":
         return (
           <DataTableSedes
             data={sedes}
@@ -288,7 +275,21 @@ export const Admin: React.FC<AdminProps> = ({ user }) => {
 
   return (
     <div className="min-h-screen bg-gradient-to-bl from-slate-400 to-cyan-800">
-      <TopPage user={usuarios[0]} />
+ <TopPage
+  user={
+    usuarios[0] ?? {
+      idUsuario: 0,
+      name: "",
+      lastname: "",
+      email: "",
+      role: "",
+      status: "",
+      sedeId: null,
+    }
+  }
+/>
+
+
       <main className="container mx-auto p-6">
         <Card className="bg-white p-6 rounded-lg shadow">
           <h2 className="text-3xl font-bold mb-6 text-gray-800">

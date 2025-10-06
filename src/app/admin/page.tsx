@@ -1,40 +1,46 @@
-//@/app/chekin/page.tsx
-import { auth } from "@/auth";
-import { user } from "@/types/interfaces";
-import { Informa } from "@/components/General/informa";
-import { Admin } from "@/app/admin/page.client";
+import { cookies } from "next/headers";
+import jwt from "jsonwebtoken";
+import { prisma } from "@/lib/prisma";
+import Admin from "./page.client";
 
-async function CheckinLlegadasContainer() {
-  const session = await auth();
-  const userr: user = {
-    id: session?.user.id || "",
-    name: session?.user.name || "",
-    role: session?.user.role || "",
-    email: session?.user.email || "",
-  };
-  //verificar que la sesion exista
-  if (!session) {
-    return (
-      <Informa
-        text="Inicia sesión para continuar"
-        btntxt="Volver para iniciar sesión"
-        log={true}
-      />
-    );
+const JWT_SECRET = process.env.JWT_SECRET || "dev-secret";
+
+export default async function AdminPage() {
+  try {
+    const token = cookies().get("token")?.value;
+    if (!token) {
+      // sin token => no logueado
+      return <Admin user={null} error="No hay sesión" />;
+    }
+
+    let payload: any;
+    try {
+      payload = jwt.verify(token, JWT_SECRET);
+    } catch {
+      return <Admin user={null} error="Sesión inválida" />;
+    }
+
+    const user = await prisma.usuario.findUnique({
+      where: { email: payload.email },
+      select: {
+        idUsuario: true,
+        name: true,
+        lastname: true,
+        email: true,
+        role: true,
+        status: true,
+        sedeId: true,
+        sede: { select: { nombre: true } },
+      },
+    });
+
+    if (!user) {
+      return <Admin user={null} error="Usuario no encontrado" />;
+    }
+
+    return <Admin user={user as any} error={null} />;
+  } catch (error) {
+    console.error("[/admin] load user error:", error);
+    return <Admin user={null} error="Error al cargar usuario" />;
   }
-  // Verificar si el usuario tiene el rol correcto
-  const rol = session.user?.role || "";
-  if (rol !== "administrador") {
-    return (
-      <Informa
-        text="Acceso denegado"
-        btntxt="Volver para iniciar sesión"
-        log={true}
-      />
-    );
-  }
-  // componente principal con toda la logica de admin
-  return <Admin user={userr} />;
 }
-
-export default CheckinLlegadasContainer;
