@@ -238,7 +238,7 @@ export default function InfoAlertPrototype() {
             </table>
           </div>
 
-          {/* Footer tabla: paginación + botón PDF */}
+          {/* Footer tabla: Vpaginación + botón PDF */}
           <div className="mt-4 flex items-center gap-3">
             <button
               className="px-4 py-2 rounded-md bg-gray-200 hover:bg-gray-300 disabled:opacity-50"
@@ -264,6 +264,8 @@ export default function InfoAlertPrototype() {
                   selected.length ? "bg-cyan-700 hover:opacity-90" : "bg-cyan-300 cursor-not-allowed"
                 )}
               >
+
+
                 Generar PDF ({selected.length} seleccionado{selected.length === 1 ? "" : "s"})
               </button>
             </div>
