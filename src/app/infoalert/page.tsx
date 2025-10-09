@@ -252,7 +252,7 @@ export default function InfoAlertPrototype() {
               disabled={page === totalPages}
               onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
             >
-              Siguiente
+              SiguienteE
             </button>
 
             <div className="ml-auto w-full md:w-auto">
